@@ -3864,6 +3864,9 @@ label {
   text-align: left;
   border-bottom: 1px solid #eee;
 }
+.wx-chat-row.pinned {
+  background: #f3f3f3;
+}
 .wx-chat-row > div {
   flex: 1;
   min-width: 0;
@@ -4592,6 +4595,9 @@ label {
 .dark-phone .wx-profile {
   background: #242424;
   color: #eee;
+}
+.dark-phone .wx-chat-row.pinned {
+  background: #2e2e2e;
 }
 .dark-phone .wx-search,
 .dark-phone .wa-search,

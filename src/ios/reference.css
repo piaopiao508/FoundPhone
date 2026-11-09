@@ -138,6 +138,9 @@
   border-bottom: 0;
   position: relative;
 }
+.ios18 .wechat-ui .wx-chat-row.pinned {
+  background: #f3f3f3;
+}
 .ios18 .wechat-ui .wx-chat-row:after {
   position: absolute;
   content: "";

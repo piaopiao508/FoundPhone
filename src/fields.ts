@@ -58,6 +58,11 @@ const fields: Record<string, Field[]> = {
     { key: "server", label: "服务器名称" },
     { key: "status", label: "成员状态" },
   ],
+  wechat: [
+    { key: "nickname", label: "微信昵称" },
+    { key: "wechatId", label: "微信号" },
+    { key: "pinned", label: "置顶会话" },
+  ],
   qq: [{ key: "number", label: "QQ号码" }],
   telegram: [{ key: "handle", label: "用户名" }],
   alipay: [

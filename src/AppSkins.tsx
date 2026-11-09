@@ -89,17 +89,24 @@ function MessageList({
   onItem,
   onRead,
   whatsapp = false,
+  ownerAvatar = "",
 }: {
   items: Item[];
   creator: boolean;
   onItem: (i: Item) => void;
   onRead: (id: string) => void;
   whatsapp?: boolean;
+  ownerAvatar?: string;
 }) {
+  const visibleMessages = items.filter(
+    (i) => i.body || ["image", "audio", "video", "transfer"].includes(i.kind),
+  );
   return (
     <div className={`skin-messages ${whatsapp ? "wa-wallpaper" : ""}`}>
-      <div className="skin-date">{items[0]?.time.slice(0, 10)}</div>
-      {items.map((i) => (
+      {visibleMessages.length > 0 && (
+        <div className="skin-date">{visibleMessages[0]?.time.slice(0, 10)}</div>
+      )}
+      {visibleMessages.map((i) => (
         <div
           key={i.id}
           className={`skin-message ${i.outgoing ? "outgoing" : ""}`}
@@ -126,7 +133,9 @@ function MessageList({
               {whatsapp && i.outgoing && <CheckCheck size={11} />}
             </small>
           </button>
-          {!whatsapp && i.outgoing && <Avatar name={i.sender} src={i.avatar} />}
+          {!whatsapp && i.outgoing && (
+            <Avatar name={i.sender} src={i.avatar || ownerAvatar} />
+          )}
         </div>
       ))}
     </div>
@@ -163,16 +172,47 @@ export function WeChatSkin(p: SkinProps) {
     "readThreads",
     [],
   );
-  const conversations = [
+  const ownerName = p.owner || "机主";
+  const profileItem = p.items.find((i) => i.folder === "我");
+  const wxName = profileItem?.meta?.nickname || ownerName;
+  const isOwner = (name: string) => name === ownerName || name === wxName;
+  const ownerAvatar =
+    profileItem?.avatar ||
+    profileItem?.media ||
+    p.items.find((i) => (i.outgoing || isOwner(i.sender)) && i.avatar)
+      ?.avatar ||
+    "";
+  const isItemPinned = (i: Item) => i.favorite || i.meta?.pinned === "true";
+  const rawConversations = [
     ...new Set(
       p.items
         .filter((i) => !["朋友圈", "我"].includes(i.folder))
         .map((i) => i.title),
     ),
   ];
-  const contacts = [
-    ...new Set(p.items.map((i) => i.sender).filter((s) => s !== "我")),
+  const isThreadPinned = (title: string) =>
+    p.items.some(
+      (i) =>
+        !["朋友圈", "我"].includes(i.folder) &&
+        i.title === title &&
+        isItemPinned(i),
+    );
+  const conversations = [
+    ...rawConversations.filter(isThreadPinned),
+    ...rawConversations.filter((t) => !isThreadPinned(t)),
   ];
+  const contacts = [
+    ...new Set(
+      p.items
+        .filter((i) => i.folder !== "我" && !i.outgoing)
+        .map((i) => i.sender)
+        .filter((s) => s !== "我" && !isOwner(s)),
+    ),
+  ];
+  const pinnedContacts = contacts.filter((c) =>
+    p.items.some((i) => i.folder !== "我" && i.sender === c && isItemPinned(i)),
+  );
+  const normalContacts = contacts.filter((c) => !pinnedContacts.includes(c));
   const posts = p.items.filter(
     (i) => i.folder === "朋友圈" || i.kind === "post",
   );
@@ -252,10 +292,13 @@ export function WeChatSkin(p: SkinProps) {
               ].map((name) => (
                 <div key={name}>
                   <Avatar
-                    name={name}
-                    src={p.items.find((i) => i.sender === name)?.avatar}
+                    name={isOwner(name) ? wxName : name}
+                    src={
+                      p.items.find((i) => i.sender === name && i.avatar)
+                        ?.avatar || (isOwner(name) ? ownerAvatar : "")
+                    }
                   />
-                  <small>{name}</small>
+                  <small>{isOwner(name) ? wxName : name}</small>
                 </div>
               ))}
             </div>
@@ -282,6 +325,7 @@ export function WeChatSkin(p: SkinProps) {
             creator={p.creator}
             onItem={p.onItem}
             onRead={p.onRead}
+            ownerAvatar={ownerAvatar}
           />
           <Compose creator={p.creator} onAdd={p.onAdd} />
         </>
@@ -297,9 +341,12 @@ export function WeChatSkin(p: SkinProps) {
               className="wx-moment-post"
               onClick={() => p.onItem(i)}
             >
-              <Avatar name={i.sender} />
+              <Avatar
+                name={isOwner(i.sender) ? wxName : i.sender}
+                src={i.avatar || (isOwner(i.sender) ? ownerAvatar : "")}
+              />
               <div>
-                <strong>{i.sender}</strong>
+                <strong>{isOwner(i.sender) ? wxName : i.sender}</strong>
                 <p>{i.body}</p>
                 {i.media && <ItemMedia item={i} />}
                 <small>{i.time}</small>
@@ -338,10 +385,15 @@ export function WeChatSkin(p: SkinProps) {
                 )
                 .map((t) => {
                   const list = p.items.filter((i) => i.title === t),
-                    last = list.at(-1)!;
+                    last = list.at(-1)!,
+                    pinned = isThreadPinned(t),
+                    peerAvatar =
+                      list.find((i) => !i.outgoing && i.avatar)?.avatar ||
+                      last.avatar;
                   return (
                     <button
-                      className="wx-chat-row"
+                      className={`wx-chat-row ${pinned ? "pinned" : ""}`.trim()}
+                      data-pinned={pinned || undefined}
                       key={t}
                       onClick={() => {
                         setReadThreads((v) => (v.includes(t) ? v : [...v, t]));
@@ -350,7 +402,7 @@ export function WeChatSkin(p: SkinProps) {
                       }}
                     >
                       <span className="wx-chat-avatar">
-                        <Avatar name={t} src={last.avatar} />
+                        <Avatar name={t} src={peerAvatar} />
                         {!readThreads.includes(t) &&
                           list.some((i) => !i.read) && (
                             <b className="wx-unread">
@@ -370,26 +422,68 @@ export function WeChatSkin(p: SkinProps) {
             </>
           ) : tab === "通讯录" ? (
             <>
-              <div className="wx-section-label">联系人</div>
-              {contacts.map((c) => (
-                <button
-                  key={c}
-                  className="wx-contact"
-                  onClick={() => {
-                    const item = p.items.find((i) => i.sender === c);
-                    if (item) {
-                      p.onThread(item.title);
-                      p.onRead(item.title);
-                    }
-                  }}
-                >
-                  <Avatar
-                    name={c}
-                    src={p.items.find((i) => i.sender === c)?.avatar}
-                  />
-                  {c}
-                </button>
-              ))}
+              {pinnedContacts.length > 0 && (
+                <>
+                  <div className="wx-section-label">置顶联系人</div>
+                  {pinnedContacts.map((c) => (
+                    <button
+                      key={`pin-${c}`}
+                      className="wx-contact pinned"
+                      onClick={() => {
+                        const item = p.items.find(
+                          (i) => i.folder !== "我" && i.sender === c,
+                        );
+                        if (item) {
+                          p.onThread(item.title);
+                          p.onRead(item.title);
+                        }
+                      }}
+                    >
+                      <Avatar
+                        name={c}
+                        src={
+                          p.items.find(
+                            (i) =>
+                              i.folder !== "我" && i.sender === c && i.avatar,
+                          )?.avatar || (isOwner(c) ? ownerAvatar : "")
+                        }
+                      />
+                      {c}
+                    </button>
+                  ))}
+                </>
+              )}
+              {normalContacts.length > 0 && (
+                <>
+                  <div className="wx-section-label">联系人</div>
+                  {normalContacts.map((c) => (
+                    <button
+                      key={c}
+                      className="wx-contact"
+                      onClick={() => {
+                        const item = p.items.find(
+                          (i) => i.folder !== "我" && i.sender === c,
+                        );
+                        if (item) {
+                          p.onThread(item.title);
+                          p.onRead(item.title);
+                        }
+                      }}
+                    >
+                      <Avatar
+                        name={c}
+                        src={
+                          p.items.find(
+                            (i) =>
+                              i.folder !== "我" && i.sender === c && i.avatar,
+                          )?.avatar || (isOwner(c) ? ownerAvatar : "")
+                        }
+                      />
+                      {c}
+                    </button>
+                  ))}
+                </>
+              )}
             </>
           ) : tab === "发现" ? (
             <div className="wx-discover-groups">
@@ -419,10 +513,12 @@ export function WeChatSkin(p: SkinProps) {
           ) : (
             <>
               <div className="wx-profile">
-                <Avatar name={p.owner || "机主"} />
+                <Avatar name={wxName} src={ownerAvatar} />
                 <div>
-                  <h2>{p.owner || "机主"}</h2>
-                  <small>微信号：未设置</small>
+                  <h2>{wxName}</h2>
+                  <small>
+                    微信号：{profileItem?.meta?.wechatId || "未设置"}
+                  </small>
                   <button
                     className="wx-profile-status"
                     onClick={() => setUtility("状态")}
